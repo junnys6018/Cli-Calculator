@@ -18,7 +18,7 @@ public:
 		if (error.type == Type::INVALID_CHAR) {
 			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
 			out << "    " << error.source << "\n";
-			out << std::string(error.location + 4, ' ') << "^---- Here\n";
+			out << std::string(error.location + 4, ' ') << "^---- Here";
 		}
 
 		return out;
@@ -230,16 +230,30 @@ public:
 
 class Parser {
 public:
-	Parser(const std::vector<Token>& tokens) : position(0), tokens(tokens) {
+	Parser(const std::vector<Token>& tokens) : position(0), tokens(tokens), expr(nullptr) {
 	}
 
-	Expression* Parse() {
-		return Term();
+	~Parser() {
+		if (expr)
+			delete expr;
+	}
+
+	Error Parse() {
+		expr = Term();
+		return Error(Error::Type::NO_ERROR, 0, "");
+	}
+
+	float Value() {
+		if (expr)
+			return expr->Evaluate();
+
+		return 0;
 	}
 
 private:
 	size_t position;
 	const std::vector<Token>& tokens;
+	Expression* expr;
 
 private:
 	template <typename... Args>
@@ -322,19 +336,23 @@ void ProcessInput(const std ::string& input) {
 	Error error = lexer.Scan();
 
 	if (error) {
-		std::cout << error;
+		std::cout << error << std::endl;
 		return;
 	}
 
 	Parser parser(lexer.GetTokens());
-	Expression* expr = parser.Parse();
-	std::cout << expr->Evaluate();
+	error = parser.Parse();
 
-	delete expr;
+	if (error) {
+		std::cout << error << std::endl;
+		return;
+	}
+
+	std::cout << parser.Value() << std::endl;
 }
 
 int main() {
-	ProcessInput("23.23.2");
+	ProcessInput("(3+3)/2");
 }
 
 // 3a
