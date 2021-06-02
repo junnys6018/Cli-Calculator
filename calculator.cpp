@@ -1,8 +1,33 @@
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
-enum class TokenType { ADD, SUB, MUL, DIV, LITERAL, RIGHT_PAREN, LEFT_PAREN };
+class Error {
+public:
+	enum class Type { NO_ERROR, INVALID_CHAR, MISSING_CLOSING_PAREN, MISSING_OPENING_PAREN };
+
+	Error(Error::Type type, size_t location, std::string_view source) : type(type), location(location), source(source) {
+	}
+
+	Type type;
+	size_t location;
+	std::string_view source;
+
+	friend std::ostream& operator<<(std::ostream& out, Error error) {
+		if (error.type == Type::INVALID_CHAR) {
+			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
+			out << "    " << error.source << "\n";
+			out << std::string(error.location + 4, ' ') << "^---- Here\n";
+		}
+
+		return out;
+	}
+
+	operator bool() {
+		return type != Type::NO_ERROR;
+	}
+};
 
 class Token {
 public:
@@ -22,7 +47,7 @@ public:
 	Lexer(const std::string& source) : position(0), tokens(), source(source) {
 	}
 
-	void Scan() {
+	Error Scan() {
 		while (position < source.length()) {
 			if (IsWhiteSpace(source[position])) {
 				position++;
@@ -54,19 +79,15 @@ public:
 				position++;
 				break;
 			default:
-				size_t start = position;
-				bool hasDecimalPoint = false;
-				while (IsDigit(source[position]) || (!hasDecimalPoint && source[position] == '.')) {
-					if (source[position] == '.') {
-						hasDecimalPoint = true;
-					}
-					position++;
+				auto [value, success] = GetLiteral();
+				if (!success) {
+					return Error(Error::Type::INVALID_CHAR, position, source);
 				}
-				float value = std::stof(source.substr(start, position - start));
 				tokens.emplace_back(value);
 				break;
 			}
 		}
+		return Error(Error::Type::NO_ERROR, 0, source);
 	}
 
 	void PrintTokens() {
@@ -116,12 +137,30 @@ private:
 	bool IsWhiteSpace(char ch) {
 		return ch == ' ' || ch == '\t';
 	}
+
+	std::pair<float, bool> GetLiteral() {
+		if (!IsDigit(source[position])) { // ".234" is considered an error
+			return {0, false};
+		}
+		size_t start = position;
+		bool hasDecimalPoint = false;
+
+		while (IsDigit(source[position]) || (!hasDecimalPoint && source[position] == '.')) {
+			if (source[position] == '.') {
+				hasDecimalPoint = true;
+			}
+			position++;
+		}
+
+		return {std::stof(source.substr(start, position - start)), true};
+	}
 };
 
 class Expression {
 public:
 	virtual float Evaluate() = 0;
-	virtual ~Expression() {}
+	virtual ~Expression() {
+	}
 };
 
 class LiteralExpression : public Expression {
@@ -151,8 +190,7 @@ public:
 
 class AddExpression : public BinaryExpression {
 public:
-	AddExpression(Expression* lhs, Expression* rhs) 
-	: BinaryExpression(lhs, rhs) {
+	AddExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
 	float Evaluate() {
@@ -162,8 +200,7 @@ public:
 
 class SubtractExpression : public BinaryExpression {
 public:
-	SubtractExpression(Expression* lhs, Expression* rhs) 
-	: BinaryExpression(lhs, rhs) {
+	SubtractExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
 	float Evaluate() {
@@ -173,8 +210,7 @@ public:
 
 class MultiplyExpression : public BinaryExpression {
 public:
-	MultiplyExpression(Expression* lhs, Expression* rhs) 
-	: BinaryExpression(lhs, rhs) {
+	MultiplyExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
 	float Evaluate() {
@@ -184,8 +220,7 @@ public:
 
 class DivideExpression : public BinaryExpression {
 public:
-	DivideExpression(Expression* lhs, Expression* rhs) 
-	: BinaryExpression(lhs, rhs) {
+	DivideExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
 	float Evaluate() {
@@ -201,6 +236,7 @@ public:
 	Expression* Parse() {
 		return Term();
 	}
+
 private:
 	size_t position;
 	const std::vector<Token>& tokens;
@@ -266,28 +302,47 @@ private:
 	}
 
 	Expression* Primary() {
-		if (Match(TokenType::LITERAL)) {
+		if (Match(Token::Type::LITERAL)) {
 			float value = tokens[position].literal_value;
 			position++;
 			return new LiteralExpression{value};
 		}
 
-		if (Match(TokenType::LEFT_PAREN)) {
+		if (Match(Token::Type::LEFT_PAREN)) {
 			position++;
 			Expression* expr = Term();
-			Consume(TokenType::RIGHT_PAREN);
+			Consume(Token::Type::RIGHT_PAREN);
 			return expr;
 		}
 	}
 };
 
-int main() {
-	Lexer lexer("(3 + 3)  * 2/ (4 -1)");
-	lexer.Scan();
+void ProcessInput(const std ::string& input) {
+	Lexer lexer(input);
+	Error error = lexer.Scan();
+
+	if (error) {
+		std::cout << error;
+		return;
+	}
 
 	Parser parser(lexer.GetTokens());
-	Expression* expr = parser();
+	Expression* expr = parser.Parse();
 	std::cout << expr->Evaluate();
 
 	delete expr;
 }
+
+int main() {
+	ProcessInput("23.23.2");
+}
+
+// 3a
+// 23.23.3
+
+// 3++3
+// ()
+// ())
+// (
+// (2+1))
+// 23 23
