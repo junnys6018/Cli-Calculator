@@ -351,8 +351,23 @@ void ProcessInput(const std ::string& input) {
 	std::cout << parser.Value() << std::endl;
 }
 
+void PrintInfo() {
+	std::cout << "Basic CLI calculator but Jun Lim https://github.com/junnys6018" << std::endl;
+	std::cout << "Type 'exit' to exit\n";
+}
+
 int main() {
-	ProcessInput("(3+3)/2");
+	PrintInfo();
+	std::string input;
+
+	std::cout << ">>> ";
+	while (std::getline(std::cin, input)) {
+		if (input == "exit") {
+			return 0;
+		}
+		ProcessInput(input);
+		std::cout << ">>> ";
+	}
 }
 
 // 3a
