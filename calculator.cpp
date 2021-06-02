@@ -120,6 +120,7 @@ private:
 class Expression {
 public:
 	virtual float Evaluate() = 0;
+	virtual ~Expression() {}
 };
 
 class LiteralExpression : public Expression {
@@ -133,52 +134,62 @@ public:
 	float value;
 };
 
-class AddExpression : public Expression {
+class BinaryExpression : public Expression {
 public:
-	AddExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
+	BinaryExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
 	}
+
+	virtual ~BinaryExpression() {
+		delete lhs;
+		delete rhs;
+	}
+
+	Expression* lhs;
+	Expression* rhs;
+};
+
+class AddExpression : public BinaryExpression {
+public:
+	AddExpression(Expression* lhs, Expression* rhs) 
+	: BinaryExpression(lhs, rhs) {
+	}
+
 	float Evaluate() {
 		return lhs->Evaluate() + rhs->Evaluate();
 	}
-
-	Expression* lhs;
-	Expression* rhs;
 };
 
-class SubtractExpression : public Expression {
+class SubtractExpression : public BinaryExpression {
 public:
-	SubtractExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
+	SubtractExpression(Expression* lhs, Expression* rhs) 
+	: BinaryExpression(lhs, rhs) {
 	}
+
 	float Evaluate() {
 		return lhs->Evaluate() - rhs->Evaluate();
 	}
-
-	Expression* lhs;
-	Expression* rhs;
 };
 
-class MultiplyExpression : public Expression {
+class MultiplyExpression : public BinaryExpression {
 public:
-	MultiplyExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
+	MultiplyExpression(Expression* lhs, Expression* rhs) 
+	: BinaryExpression(lhs, rhs) {
 	}
+
 	float Evaluate() {
 		return lhs->Evaluate() * rhs->Evaluate();
 	}
-
-	Expression* lhs;
-	Expression* rhs;
 };
 
-class DivideExpression : public Expression {
+class DivideExpression : public BinaryExpression {
 public:
-	DivideExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
+	DivideExpression(Expression* lhs, Expression* rhs) 
+	: BinaryExpression(lhs, rhs) {
 	}
+
 	float Evaluate() {
 		return lhs->Evaluate() / rhs->Evaluate();
 	}
-
-	Expression* lhs;
-	Expression* rhs;
 };
 
 class Parser {
@@ -270,11 +281,12 @@ private:
 };
 
 int main() {
-	Lexer lexer("(3+3)*2");
+	Lexer lexer("(3 + 3)  * 2/ (4 -1)");
 	lexer.Scan();
-	lexer.PrintTokens();
 
 	Parser parser(lexer.GetTokens());
 	Expression* expr = parser();
 	std::cout << expr->Evaluate();
+
+	delete expr;
 }
