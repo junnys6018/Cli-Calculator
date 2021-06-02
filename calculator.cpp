@@ -352,7 +352,7 @@ void ProcessInput(const std ::string& input) {
 }
 
 void PrintInfo() {
-	std::cout << "Basic CLI calculator but Jun Lim https://github.com/junnys6018" << std::endl;
+	std::cout << "Basic CLI calculator by Jun Lim https://github.com/junnys6018" << std::endl;
 	std::cout << "Type 'exit' to exit\n";
 }
 
