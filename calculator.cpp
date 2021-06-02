@@ -6,13 +6,14 @@ enum class TokenType { ADD, SUB, MUL, DIV, LITERAL, RIGHT_PAREN, LEFT_PAREN };
 
 class Token {
 public:
-	Token(TokenType type) : token_type(type) {
+	enum class Type { ADD, SUB, MUL, DIV, LITERAL, RIGHT_PAREN, LEFT_PAREN };
+	Token(Type type) : token_type(type) {
 	}
 
-	Token(float value) : token_type(TokenType::LITERAL), literal_value(value) {
+	Token(float value) : token_type(Type::LITERAL), literal_value(value) {
 	}
 
-	TokenType token_type;
+	Type token_type;
 	float literal_value;
 };
 
@@ -29,37 +30,37 @@ public:
 			}
 			switch (source[position]) {
 			case '+':
-				tokens.emplace_back(TokenType::ADD);
+				tokens.emplace_back(Token::Type::ADD);
 				position++;
 				break;
 			case '-':
-				tokens.emplace_back(TokenType::SUB);
+				tokens.emplace_back(Token::Type::SUB);
 				position++;
 				break;
 			case '*':
-				tokens.emplace_back(TokenType::MUL);
+				tokens.emplace_back(Token::Type::MUL);
 				position++;
 				break;
 			case '/':
-				tokens.emplace_back(TokenType::DIV);
+				tokens.emplace_back(Token::Type::DIV);
 				position++;
 				break;
 			case '(':
-				tokens.emplace_back(TokenType::LEFT_PAREN);
+				tokens.emplace_back(Token::Type::LEFT_PAREN);
 				position++;
 				break;
 			case ')':
-				tokens.emplace_back(TokenType::RIGHT_PAREN);
+				tokens.emplace_back(Token::Type::RIGHT_PAREN);
 				position++;
 				break;
 			default:
 				size_t start = position;
 				bool hasDecimalPoint = false;
 				while (IsDigit(source[position]) || (!hasDecimalPoint && source[position] == '.')) {
-					position++;
-					if (source[position == '.']) {
+					if (source[position] == '.') {
 						hasDecimalPoint = true;
 					}
+					position++;
 				}
 				float value = std::stof(source.substr(start, position - start));
 				tokens.emplace_back(value);
@@ -72,25 +73,25 @@ public:
 		for (auto& token : tokens) {
 			std::cout << '|';
 			switch (token.token_type) {
-			case TokenType::ADD:
+			case Token::Type::ADD:
 				std::cout << '+';
 				break;
-			case TokenType::SUB:
+			case Token::Type::SUB:
 				std::cout << '-';
 				break;
-			case TokenType::MUL:
+			case Token::Type::MUL:
 				std::cout << '*';
 				break;
-			case TokenType::DIV:
+			case Token::Type::DIV:
 				std::cout << '/';
 				break;
-			case TokenType::LEFT_PAREN:
+			case Token::Type::LEFT_PAREN:
 				std::cout << '(';
 				break;
-			case TokenType::RIGHT_PAREN:
+			case Token::Type::RIGHT_PAREN:
 				std::cout << ')';
 				break;
-			case TokenType::LITERAL:
+			case Token::Type::LITERAL:
 				std::cout << token.literal_value;
 				break;
 			}
@@ -197,7 +198,7 @@ public:
 	Parser(const std::vector<Token>& tokens) : position(0), tokens(tokens) {
 	}
 
-	Expression* operator()() {
+	Expression* Parse() {
 		return Term();
 	}
 private:
@@ -206,15 +207,15 @@ private:
 
 private:
 	template <typename... Args>
-	bool Match(TokenType type, Args... args) {
+	bool Match(Token::Type type, Args... args) {
 		return Check(type) || Match(args...);
 	}
 
-	bool Match(TokenType type) {
+	bool Match(Token::Type type) {
 		return Check(type);
 	}
 
-	bool Check(TokenType type) {
+	bool Check(Token::Type type) {
 		if (IsAtEnd())
 			return false;
 
@@ -225,7 +226,7 @@ private:
 		return position == tokens.size();
 	}
 
-	bool Consume(TokenType type) {
+	bool Consume(Token::Type type) {
 		position++;
 		return tokens[position - 1].token_type == type;
 	}
@@ -233,11 +234,11 @@ private:
 	Expression* Term() {
 		Expression* expr = Factor();
 
-		while (Match(TokenType::ADD, TokenType::SUB)) {
-			TokenType type = tokens[position].token_type;
+		while (Match(Token::Type::ADD, Token::Type::SUB)) {
+			Token::Type type = tokens[position].token_type;
 			position++;
 			Expression* rhs = Factor();
-			if (type == TokenType::ADD) {
+			if (type == Token::Type::ADD) {
 				expr = new AddExpression{expr, rhs};
 			} else {
 				expr = new SubtractExpression{expr, rhs};
@@ -250,11 +251,11 @@ private:
 	Expression* Factor() {
 		Expression* expr = Primary();
 
-		while (Match(TokenType::MUL, TokenType::DIV)) {
-			TokenType type = tokens[position].token_type;
+		while (Match(Token::Type::MUL, Token::Type::DIV)) {
+			Token::Type type = tokens[position].token_type;
 			position++;
 			Expression* rhs = Primary();
-			if (type == TokenType::MUL) {
+			if (type == Token::Type::MUL) {
 				expr = new MultiplyExpression{expr, rhs};
 			} else {
 				expr = new DivideExpression{expr, rhs};
