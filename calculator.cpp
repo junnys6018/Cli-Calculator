@@ -2,6 +2,9 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <algorithm> 
+#include <cctype>
+#include <locale>
 
 class Error {
 public:
@@ -19,8 +22,7 @@ public:
 			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
 			out << "    " << error.source << "\n";
 			out << std::string(error.location + 4, ' ') << "^---- Here";
-		}
-		else if (error.type == Type::INVALID_TOKEN) {
+		} else if (error.type == Type::INVALID_TOKEN) {
 			out << "Error: Unexpected Token";
 		}
 
@@ -371,16 +373,34 @@ void PrintInfo() {
 	std::cout << "Type 'exit' to exit\n";
 }
 
+// trim from start (in place)
+static inline void ltrim(std::string& s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
+}
+
+// trim from end (in place)
+static inline void rtrim(std::string& s) {
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
+}
+
+// trim from both ends (in place)
+static inline void trim(std::string& s) {
+	ltrim(s);
+	rtrim(s);
+}
+
 int main() {
 	PrintInfo();
 	std::string input;
 
 	std::cout << ">>> ";
 	while (std::getline(std::cin, input)) {
+		// Trim whitespace
+		trim(input);
+
 		if (input == "exit") {
 			return 0;
-		}
-		else if (input == "") {
+		} else if (input == "") {
 			std::cout << ">>> ";
 			continue;
 		}
