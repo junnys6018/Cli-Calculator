@@ -5,7 +5,7 @@
 
 class Error {
 public:
-	enum class Type { NO_ERROR, INVALID_CHAR, MISSING_CLOSING_PAREN, MISSING_OPENING_PAREN };
+	enum class Type { NO_ERROR, INVALID_CHAR, INVALID_TOKEN };
 
 	Error(Error::Type type, size_t location, std::string_view source) : type(type), location(location), source(source) {
 	}
@@ -19,6 +19,9 @@ public:
 			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
 			out << "    " << error.source << "\n";
 			out << std::string(error.location + 4, ' ') << "^---- Here";
+		}
+		else if (error.type == Type::INVALID_TOKEN) {
+			out << "Error: Unexpected Token";
 		}
 
 		return out;
@@ -239,7 +242,15 @@ public:
 	}
 
 	Error Parse() {
-		expr = Term();
+		try {
+			expr = Term();
+		} catch (int i) {
+			return Error(Error::Type::INVALID_TOKEN, 0, "");
+		}
+
+		if (position != tokens.size()) {
+			return Error(Error::Type::INVALID_TOKEN, 0, "");
+		}
 		return Error(Error::Type::NO_ERROR, 0, "");
 	}
 
@@ -276,9 +287,11 @@ private:
 		return position == tokens.size();
 	}
 
-	bool Consume(Token::Type type) {
+	void Consume(Token::Type type) {
 		position++;
-		return tokens[position - 1].token_type == type;
+		if (tokens[position - 1].token_type != type) {
+			throw 1;
+		}
 	}
 
 	Expression* Term() {
@@ -328,6 +341,8 @@ private:
 			Consume(Token::Type::RIGHT_PAREN);
 			return expr;
 		}
+
+		throw 1;
 	}
 };
 
@@ -364,6 +379,10 @@ int main() {
 	while (std::getline(std::cin, input)) {
 		if (input == "exit") {
 			return 0;
+		}
+		else if (input == "") {
+			std::cout << ">>> ";
+			continue;
 		}
 		ProcessInput(input);
 		std::cout << ">>> ";
