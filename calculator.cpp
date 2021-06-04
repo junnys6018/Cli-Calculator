@@ -1,10 +1,10 @@
+#include <algorithm>
+#include <cctype>
 #include <iostream>
+#include <locale>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <algorithm> 
-#include <cctype>
-#include <locale>
 
 class Error {
 public:
@@ -95,36 +95,6 @@ public:
 		return Error(Error::Type::NO_ERROR, 0, source);
 	}
 
-	void PrintTokens() {
-		for (auto& token : tokens) {
-			std::cout << '|';
-			switch (token.token_type) {
-			case Token::Type::ADD:
-				std::cout << '+';
-				break;
-			case Token::Type::SUB:
-				std::cout << '-';
-				break;
-			case Token::Type::MUL:
-				std::cout << '*';
-				break;
-			case Token::Type::DIV:
-				std::cout << '/';
-				break;
-			case Token::Type::LEFT_PAREN:
-				std::cout << '(';
-				break;
-			case Token::Type::RIGHT_PAREN:
-				std::cout << ')';
-				break;
-			case Token::Type::LITERAL:
-				std::cout << token.literal_value;
-				break;
-			}
-		}
-		std::cout << '|' << std::endl;
-	}
-
 	const std::vector<Token>& GetTokens() {
 		return tokens;
 	}
@@ -140,7 +110,7 @@ private:
 	}
 
 	bool IsWhiteSpace(char ch) {
-		return ch == ' ' || ch == '\t';
+		return std::isspace(ch);
 	}
 
 	std::pair<float, bool> GetLiteral() {
@@ -148,15 +118,17 @@ private:
 			return {0, false};
 		}
 		size_t start = position;
-		bool hasDecimalPoint = false;
+		bool has_decimal_point = false;
 
-		while (IsDigit(source[position]) || (!hasDecimalPoint && source[position] == '.')) {
+		while (IsDigit(source[position]) || (!has_decimal_point && source[position] == '.')) {
 			if (source[position] == '.') {
-				hasDecimalPoint = true;
+				has_decimal_point = true;
 			}
 			position++;
 		}
 
+		// I believe string::substr() makes a copy, probs not a good idea here as
+		// we only want to parse a float from a string
 		return {std::stof(source.substr(start, position - start)), true};
 	}
 };
@@ -270,12 +242,12 @@ private:
 
 private:
 	template <typename... Args>
-	bool Match(Token::Type type, Args... args) {
-		return Check(type) || Match(args...);
+	bool Match(Token::Type first, Args... args) {
+		return Check(first) || Match(args...);
 	}
 
-	bool Match(Token::Type type) {
-		return Check(type);
+	bool Match(Token::Type first) {
+		return Check(first);
 	}
 
 	bool Check(Token::Type type) {
@@ -373,20 +345,12 @@ void PrintInfo() {
 	std::cout << "Type 'exit' to exit\n";
 }
 
-// trim from start (in place)
-static inline void ltrim(std::string& s) {
+inline void Trim(std::string& s) {
+	// Trim from the left
 	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
-}
 
-// trim from end (in place)
-static inline void rtrim(std::string& s) {
+	// Trim from the right
 	s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(), s.end());
-}
-
-// trim from both ends (in place)
-static inline void trim(std::string& s) {
-	ltrim(s);
-	rtrim(s);
 }
 
 int main() {
@@ -395,8 +359,7 @@ int main() {
 
 	std::cout << ">>> ";
 	while (std::getline(std::cin, input)) {
-		// Trim whitespace
-		trim(input);
+		Trim(input);
 
 		if (input == "exit") {
 			return 0;
