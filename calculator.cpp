@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <cctype>
 #include <iostream>
 #include <locale>
 #include <string>
@@ -8,30 +7,33 @@
 
 class Error {
 public:
-	enum class Type { NO_ERROR, INVALID_CHAR, INVALID_TOKEN };
+	enum class Type { NO_ERROR, INVALID_CHAR, INVALID_TOKEN, END_OF_STREAM };
 
 	Error(Error::Type type, size_t location, std::string_view source) : type(type), location(location), source(source) {
-	}
-
-	Type type;
-	size_t location;
-	std::string_view source;
-
-	friend std::ostream& operator<<(std::ostream& out, Error error) {
-		if (error.type == Type::INVALID_CHAR) {
-			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
-			out << "    " << error.source << "\n";
-			out << std::string(error.location + 4, ' ') << "^---- Here";
-		} else if (error.type == Type::INVALID_TOKEN) {
-			out << "Error: Unexpected Token";
-		}
-
-		return out;
 	}
 
 	operator bool() {
 		return type != Type::NO_ERROR;
 	}
+
+	friend std::ostream& operator<<(std::ostream& out, Error error) {
+		if (error.type == Type::INVALID_CHAR) {
+			out << "Error: Unexpected Character: '" << error.source[error.location] << "'\n";
+		} else if (error.type == Type::INVALID_TOKEN) {
+			out << "Error: Unexpected Token\n";
+		} else if (error.type == Type::END_OF_STREAM) {
+			out << "Error: Unexpected End Of Stream\n";
+		}
+
+		out << "    " << error.source << "\n";
+		out << std::string(error.location + 4, ' ') << "^---- Here";
+
+		return out;
+	}
+
+	Type type;
+	size_t location;
+	std::string_view source;
 };
 
 class Token {
@@ -61,29 +63,36 @@ public:
 			switch (source[position]) {
 			case '+':
 				tokens.emplace_back(Token::Type::ADD);
+				token_positions.push_back(position);
 				position++;
 				break;
 			case '-':
 				tokens.emplace_back(Token::Type::SUB);
+				token_positions.push_back(position);
 				position++;
 				break;
 			case '*':
 				tokens.emplace_back(Token::Type::MUL);
+				token_positions.push_back(position);
 				position++;
 				break;
 			case '/':
 				tokens.emplace_back(Token::Type::DIV);
+				token_positions.push_back(position);
 				position++;
 				break;
 			case '(':
 				tokens.emplace_back(Token::Type::LEFT_PAREN);
+				token_positions.push_back(position);
 				position++;
 				break;
 			case ')':
 				tokens.emplace_back(Token::Type::RIGHT_PAREN);
+				token_positions.push_back(position);
 				position++;
 				break;
 			default:
+				token_positions.push_back(position);
 				auto [value, success] = GetLiteral();
 				if (!success) {
 					return Error(Error::Type::INVALID_CHAR, position, source);
@@ -99,10 +108,15 @@ public:
 		return tokens;
 	}
 
+	const std::vector<size_t>& GetPositions() {
+		return token_positions;
+	}
+
 private:
 	size_t position;
 	std::vector<Token> tokens;
-	const std::string source;
+	std::vector<size_t> token_positions;
+	const std::string& source;
 
 private:
 	bool IsDigit(char ch) {
@@ -135,7 +149,7 @@ private:
 
 class Expression {
 public:
-	virtual float Evaluate() = 0;
+	virtual float Evaluate() const = 0;
 	virtual ~Expression() {
 	}
 };
@@ -144,7 +158,7 @@ class LiteralExpression : public Expression {
 public:
 	LiteralExpression(float value) : value(value) {
 	}
-	float Evaluate() {
+	float Evaluate() const override {
 		return value;
 	}
 
@@ -170,7 +184,7 @@ public:
 	AddExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
-	float Evaluate() {
+	float Evaluate() const override {
 		return lhs->Evaluate() + rhs->Evaluate();
 	}
 };
@@ -180,7 +194,7 @@ public:
 	SubtractExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
-	float Evaluate() {
+	float Evaluate() const override {
 		return lhs->Evaluate() - rhs->Evaluate();
 	}
 };
@@ -190,7 +204,7 @@ public:
 	MultiplyExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
-	float Evaluate() {
+	float Evaluate() const override {
 		return lhs->Evaluate() * rhs->Evaluate();
 	}
 };
@@ -200,14 +214,15 @@ public:
 	DivideExpression(Expression* lhs, Expression* rhs) : BinaryExpression(lhs, rhs) {
 	}
 
-	float Evaluate() {
+	float Evaluate() const override {
 		return lhs->Evaluate() / rhs->Evaluate();
 	}
 };
 
 class Parser {
 public:
-	Parser(const std::vector<Token>& tokens) : position(0), tokens(tokens), expr(nullptr) {
+	Parser(const std::vector<Token>& tokens, const std::vector<size_t>& token_positions, const std::string& source)
+		: position(0), tokens(tokens), token_positions(token_positions), source(source), expr(nullptr) {
 	}
 
 	~Parser() {
@@ -218,26 +233,29 @@ public:
 	Error Parse() {
 		try {
 			expr = Term();
-		} catch (int i) {
-			return Error(Error::Type::INVALID_TOKEN, 0, "");
+		} catch (int) {
+			if (IsAtEnd()) {
+				return Error(Error::Type::END_OF_STREAM, source.size(), source);
+			}
+
+			return Error(Error::Type::INVALID_TOKEN, token_positions[position], source);
 		}
 
 		if (position != tokens.size()) {
-			return Error(Error::Type::INVALID_TOKEN, 0, "");
+			return Error(Error::Type::INVALID_TOKEN, token_positions[position], source);
 		}
-		return Error(Error::Type::NO_ERROR, 0, "");
+		return Error(Error::Type::NO_ERROR, 0, source);
 	}
 
-	float Value() {
-		if (expr)
-			return expr->Evaluate();
-
-		return 0;
+	const Expression* GetAST() {
+		return expr;
 	}
 
 private:
 	size_t position;
 	const std::vector<Token>& tokens;
+	const std::vector<size_t>& token_positions;
+	const std::string& source;
 	Expression* expr;
 
 private:
@@ -262,10 +280,10 @@ private:
 	}
 
 	void Consume(Token::Type type) {
-		position++;
-		if (tokens[position - 1].token_type != type) {
+		if (tokens[position].token_type != type) {
 			throw 1;
 		}
+		position++;
 	}
 
 	Expression* Term() {
@@ -329,7 +347,7 @@ void ProcessInput(const std ::string& input) {
 		return;
 	}
 
-	Parser parser(lexer.GetTokens());
+	Parser parser(lexer.GetTokens(), lexer.GetPositions(), input);
 	error = parser.Parse();
 
 	if (error) {
@@ -337,7 +355,7 @@ void ProcessInput(const std ::string& input) {
 		return;
 	}
 
-	std::cout << parser.Value() << std::endl;
+	std::cout << parser.GetAST()->Evaluate() << std::endl;
 }
 
 void PrintInfo() {
@@ -345,7 +363,7 @@ void PrintInfo() {
 	std::cout << "Type 'exit' to exit\n";
 }
 
-inline void Trim(std::string& s) {
+void Trim(std::string& s) {
 	// Trim from the left
 	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); }));
 
@@ -371,13 +389,3 @@ int main() {
 		std::cout << ">>> ";
 	}
 }
-
-// 3a
-// 23.23.3
-
-// 3++3
-// ()
-// ())
-// (
-// (2+1))
-// 23 23
