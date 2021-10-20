@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <memory>
 
 class Error {
 public:
@@ -170,13 +171,8 @@ public:
 	BinaryExpression(Expression* lhs, Expression* rhs) : lhs(lhs), rhs(rhs) {
 	}
 
-	virtual ~BinaryExpression() {
-		delete lhs;
-		delete rhs;
-	}
-
-	Expression* lhs;
-	Expression* rhs;
+	std::unique_ptr<Expression> lhs;
+	std::unique_ptr<Expression> rhs;
 };
 
 class AddExpression : public BinaryExpression {
@@ -222,17 +218,12 @@ public:
 class Parser {
 public:
 	Parser(const std::vector<Token>& tokens, const std::vector<size_t>& token_positions, const std::string& source)
-		: position(0), tokens(tokens), token_positions(token_positions), source(source), expr(nullptr) {
-	}
-
-	~Parser() {
-		if (expr)
-			delete expr;
+		: position(0), tokens(tokens), token_positions(token_positions), source(source) {
 	}
 
 	Error Parse() {
 		try {
-			expr = Term();
+			expr = std::shared_ptr<Expression>(Term());
 		} catch (int) {
 			if (IsAtEnd()) {
 				return Error(Error::Type::END_OF_STREAM, source.size(), source);
@@ -247,7 +238,7 @@ public:
 		return Error(Error::Type::NO_ERROR, 0, source);
 	}
 
-	const Expression* GetAST() {
+	std::shared_ptr<Expression> GetAST() {
 		return expr;
 	}
 
@@ -256,7 +247,7 @@ private:
 	const std::vector<Token>& tokens;
 	const std::vector<size_t>& token_positions;
 	const std::string& source;
-	Expression* expr;
+	std::shared_ptr<Expression> expr;
 
 private:
 	template <typename... Args>
